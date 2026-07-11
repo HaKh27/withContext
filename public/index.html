@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>withContext: A Context-Aware Staff Translator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --slate: #26241f;
+    --slate-2: #322f28;
+    --paper: #f2ecdd;
+    --paper-dim: #e5ddc9;
+    --ink: #1d1b18;
+    --brick: #b5502e;
+    --brick-dim: #8f3f24;
+    --sage: #6b7a5e;
+    --sage-dim: #545f47;
+    --line: #d8cfb4;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--slate);
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(181,80,46,0.08), transparent 40%),
+      radial-gradient(circle at 85% 80%, rgba(107,122,94,0.08), transparent 45%);
+    font-family: 'Inter', sans-serif;
+    color: var(--paper);
+    min-height: 100vh;
+    padding: 32px 20px 60px;
+  }
+
+  .rail {
+    max-width: 980px;
+    margin: 0 auto;
+  }
+
+  .gate {
+    position: fixed;
+    inset: 0;
+    background: var(--slate);
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(181,80,46,0.1), transparent 40%),
+      radial-gradient(circle at 85% 80%, rgba(107,122,94,0.1), transparent 45%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 100;
+  }
+
+  .gate-card {
+    max-width: 420px;
+    text-align: center;
+  }
+
+  .gate-label {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 15px;
+    color: var(--brick);
+    margin-bottom: 18px;
+  }
+
+  .gate-card h2 {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    font-size: 24px;
+    margin: 0 0 12px;
+    color: var(--paper);
+  }
+
+  .gate-card p {
+    font-size: 13.5px;
+    color: #a39c86;
+    line-height: 1.6;
+    margin: 0 0 28px;
+  }
+
+  .gate-buttons {
+    display: flex;
+    gap: 12px;
+  }
+
+  .gate-btn {
+    flex: 1;
+    padding: 16px 10px;
+    background: var(--slate-2);
+    border: 1px solid #4a463c;
+    border-radius: 6px;
+    color: var(--paper);
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .gate-btn:hover {
+    border-color: var(--brick);
+    background: var(--brick);
+  }
+
+  .lang-indicator {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: #a39c86;
+  }
+
+  .lang-indicator button {
+    background: none;
+    border: none;
+    color: var(--brick);
+    text-decoration: underline;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    padding: 0;
+    margin-left: 6px;
+  }
+
+  .masthead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 2px solid var(--brick);
+    padding-bottom: 14px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .masthead h1 {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 28px;
+    margin: 0;
+    color: var(--paper);
+  }
+
+  .masthead .sub {
+    font-size: 13px;
+    color: #a39c86;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .board {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+  }
+
+  @media (max-width: 800px) {
+    .board { grid-template-columns: 1fr; }
+  }
+
+  .panel-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--brick);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--slate-2);
+    border-top: 1px dashed #4a463c;
+  }
+
+  /* ORDER PAD */
+  .pad {
+    background: var(--slate-2);
+    border: 1px solid #443f35;
+    border-radius: 3px;
+    padding: 22px;
+  }
+
+  .field { margin-bottom: 18px; }
+
+  .field-title {
+    font-size: 12px;
+    color: #b8b09a;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+
+  .direction-toggle {
+    display: flex;
+    background: var(--slate);
+    border-radius: 4px;
+    padding: 3px;
+    gap: 3px;
+  }
+
+  .direction-toggle button {
+    flex: 1;
+    padding: 9px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 3px;
+    color: #b8b09a;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .direction-toggle button.active {
+    background: var(--brick);
+    color: var(--paper);
+  }
+
+  select {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--slate);
+    border: 1px solid #4a463c;
+    border-radius: 4px;
+    color: var(--paper);
+    font-family: 'Inter', sans-serif;
+    font-size: 13.5px;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  .chip {
+    padding: 7px 12px;
+    background: var(--slate);
+    border: 1px solid #4a463c;
+    border-radius: 20px;
+    font-size: 12.5px;
+    color: #cfc7ae;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+
+  .chip:hover { border-color: var(--sage); }
+
+  .chip.active {
+    background: var(--sage);
+    border-color: var(--sage);
+    color: var(--slate);
+    font-weight: 600;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 110px;
+    padding: 12px;
+    background: var(--slate);
+    border: 1px solid #4a463c;
+    border-radius: 4px;
+    color: var(--paper);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    resize: vertical;
+    line-height: 1.5;
+  }
+
+  textarea::placeholder { color: #6b6656; }
+
+  textarea:focus, select:focus, .fire-btn:focus-visible, .chip:focus-visible {
+    outline: 2px solid var(--brick);
+    outline-offset: 2px;
+  }
+
+  .fire-btn {
+    width: 100%;
+    padding: 13px;
+    background: var(--brick);
+    color: var(--paper);
+    border: none;
+    border-radius: 4px;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 14.5px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .fire-btn:hover:not(:disabled) { background: var(--brick-dim); }
+  .fire-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .error-msg {
+    margin-top: 10px;
+    font-size: 12.5px;
+    color: #e08a6a;
+    font-family: 'JetBrains Mono', monospace;
+    display: none;
+  }
+
+  /* TICKET OUTPUT */
+  .ticket-slot {
+    position: relative;
+    min-height: 340px;
+  }
+
+  .placeholder-ticket {
+    height: 100%;
+    min-height: 340px;
+    border: 1px dashed #4a463c;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #6b6656;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    padding: 30px;
+    line-height: 1.7;
+  }
+
+  .ticket {
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 2px;
+    padding: 26px 24px 22px;
+    position: relative;
+    font-family: 'JetBrains Mono', monospace;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+    animation: dropIn 0.35s cubic-bezier(.2,.8,.3,1);
+    display: none;
+  }
+
+  .ticket.show { display: block; }
+
+  @keyframes dropIn {
+    from { transform: translateY(-16px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .ticket::before, .ticket::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    height: 12px;
+    background-image: radial-gradient(circle, var(--slate) 5px, transparent 5.5px);
+    background-size: 18px 18px;
+    background-position: -3px center;
+  }
+  .ticket::before { top: -6px; }
+  .ticket::after { bottom: -6px; }
+
+  .ticket-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #7a7362;
+    border-bottom: 1px dashed var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+  }
+
+  .ticket-body {
+    font-size: 15px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    margin-bottom: 16px;
+  }
+
+  .copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 11px;
+    background: var(--paper-dim);
+    border: 1px solid #cfc4a3;
+    border-radius: 4px;
+    color: var(--brick-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+
+  .copy-btn:hover {
+    background: var(--sage);
+    border-color: var(--sage);
+    color: var(--paper);
+  }
+
+  .copy-btn.copied {
+    background: var(--sage-dim);
+    border-color: var(--sage-dim);
+    color: var(--paper);
+  }
+
+  .opt-block {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px dashed var(--line);
+  }
+  .opt-block:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .opt-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--brick);
+    margin-bottom: 6px;
+  }
+
+  .opt-text {
+    font-size: 15px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    margin-bottom: 8px;
+  }
+
+  .ticket-meta {
+    border-top: 1px dashed var(--line);
+    padding-top: 12px;
+    font-size: 12px;
+    color: #6b6656;
+    line-height: 1.6;
+  }
+
+  .ticket-meta .label {
+    color: var(--brick);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 10.5px;
+  }
+
+  .alt-line {
+    margin-top: 8px;
+  }
+
+  .stamp {
+    position: absolute;
+    top: 20px;
+    right: 22px;
+    border: 2px solid var(--sage-dim);
+    color: var(--sage-dim);
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transform: rotate(6deg);
+    border-radius: 3px;
+    opacity: 0.85;
+  }
+
+  .loading-ticket {
+    display: none;
+    padding: 40px 24px;
+    text-align: center;
+    color: #6b6656;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+  }
+  .loading-ticket.show { display: block; }
+
+  .dots::after {
+    content: '';
+    animation: dots 1.2s steps(4, end) infinite;
+  }
+  @keyframes dots {
+    0% { content: ''; }
+    25% { content: '.'; }
+    50% { content: '..'; }
+    75% { content: '...'; }
+  }
+
+  .footnote {
+    margin-top: 26px;
+    font-size: 11.5px;
+    color: #6b6656;
+    font-family: 'JetBrains Mono', monospace;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <div class="gate" id="gate">
+    <div class="gate-card">
+      <div class="gate-label">withContext</div>
+      <h2>Which language do you speak?</h2>
+      <p>This just tells the app which language is yours, so it knows when you're writing your own message versus reading someone else's.</p>
+      <div class="gate-buttons">
+        <button type="button" class="gate-btn" data-lang="en">English</button>
+        <button type="button" class="gate-btn" data-lang="es">Español</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="rail" id="app" style="display:none;">
+    <div class="masthead">
+      <h1>withContext</h1>
+      <div class="sub">context-aware staff translator</div>
+      <div class="lang-indicator" id="lang-indicator"></div>
+    </div>
+
+    <div class="board">
+      <!-- ORDER PAD -->
+      <div>
+        <div class="panel-label">Compose</div>
+        <div class="pad">
+
+          <div class="field">
+            <div class="field-title">I'm writing in...</div>
+            <div class="direction-toggle">
+              <button type="button" id="dir-en" class="active">English</button>
+              <button type="button" id="dir-es">Español</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="field-title">Who's this for?</div>
+            <select id="recipient">
+              <option value="a new hire, still learning the ropes">New hire</option>
+              <option value="a long-time team member I trust" selected>Long-time team member</option>
+              <option value="the whole team at once">Whole team announcement</option>
+              <option value="a vendor or supplier, keep it professional">Vendor / supplier</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <div class="field-title">What's the context?</div>
+            <div class="chips" id="situation-chips">
+              <div class="chip active" data-val="a casual, friendly check-in">Casual check-in</div>
+              <div class="chip" data-val="correcting a mistake, but kindly, not harshly">Correcting a mistake</div>
+              <div class="chip" data-val="urgent, needs a response or action right now">Urgent</div>
+              <div class="chip" data-val="encouraging or praising good work">Encouraging / praise</div>
+              <div class="chip" data-val="a schedule or shift change">Schedule change</div>
+              <div class="chip" data-val="letting an employee go, serious and respectful and clear, not harsh or cold">Firing an employee</div>
+              <div class="chip" data-val="asking someone to pick up or cover a shift, polite and direct, easy to say yes to">Asking to cover a shift</div>
+              <div class="chip" data-val="placing an order for restaurant supplies, like cleaning tools or kitchen equipment, practical and specific">Ordering supplies</div>
+              <div class="chip" data-val="responding to an employee who is quitting or giving notice, gracious and respectful, no guilt trip, leaving the door open">Employee quitting</div>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="field-title">Message</div>
+            <textarea id="message" placeholder="Type what you want to say, in plain English or Spanish..."></textarea>
+          </div>
+
+          <button class="fire-btn" id="fire-btn">Translate</button>
+          <div class="error-msg" id="error-msg"></div>
+        </div>
+      </div>
+
+      <!-- TICKET OUTPUT -->
+      <div>
+        <div class="panel-label">Result</div>
+        <div class="ticket-slot">
+          <div class="placeholder-ticket" id="placeholder">
+            Fill out the form and hit translate.<br>Your result will appear here.
+          </div>
+          <div class="loading-ticket" id="loading">
+            firing ticket<span class="dots"></span>
+          </div>
+          <div class="ticket" id="ticket">
+            <div class="ticket-head">
+              <span id="ticket-num">#001</span>
+              <span id="ticket-time">--:--</span>
+            </div>
+            <div id="ticket-content"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footnote">Bridging the context gap between language barriers.</div>
+  </div>
+
+<script>
+  let userLang = null;      // 'en' or 'es' — the language the person speaks
+  let inputLang = 'en';     // 'en' or 'es' — the language of the message being typed right now
+  let situation = 'a casual, friendly check-in';
+  let ticketCount = 0;
+
+  const LANG_NAME = { en: 'English', es: 'Spanish' };
+
+  const gate = document.getElementById('gate');
+  const app = document.getElementById('app');
+  const langIndicator = document.getElementById('lang-indicator');
+
+  function setUserLang(lang) {
+    userLang = lang;
+    inputLang = lang; // default to writing in your own language first
+    gate.style.display = 'none';
+    app.style.display = 'block';
+    updateToggleActiveState();
+    langIndicator.innerHTML = `You speak ${LANG_NAME[userLang]} <button type="button" id="change-lang">change</button>`;
+    document.getElementById('change-lang').addEventListener('click', () => {
+      gate.style.display = 'flex';
+      app.style.display = 'none';
+    });
+  }
+
+  document.querySelectorAll('.gate-btn').forEach(btn => {
+    btn.addEventListener('click', () => setUserLang(btn.dataset.lang));
+  });
+
+  const dirEn = document.getElementById('dir-en');
+  const dirEs = document.getElementById('dir-es');
+
+  function updateToggleActiveState() {
+    dirEn.classList.toggle('active', inputLang === 'en');
+    dirEs.classList.toggle('active', inputLang === 'es');
+  }
+
+  dirEn.addEventListener('click', () => { inputLang = 'en'; updateToggleActiveState(); });
+  dirEs.addEventListener('click', () => { inputLang = 'es'; updateToggleActiveState(); });
+
+  const chips = document.querySelectorAll('#situation-chips .chip');
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      chips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      situation = chip.dataset.val;
+    });
+  });
+
+  const fireBtn = document.getElementById('fire-btn');
+  const errorMsg = document.getElementById('error-msg');
+  const placeholder = document.getElementById('placeholder');
+  const loading = document.getElementById('loading');
+  const ticket = document.getElementById('ticket');
+
+  async function fireTicket() {
+    const messageEl = document.getElementById('message');
+    const message = messageEl.value.trim();
+    errorMsg.style.display = 'none';
+
+    if (!message) {
+      errorMsg.textContent = 'Write a message before firing the ticket.';
+      errorMsg.style.display = 'block';
+      return;
+    }
+
+    const recipient = document.getElementById('recipient').value;
+    const otherLang = inputLang === 'en' ? 'es' : 'en';
+    const mode = (inputLang === userLang) ? 'outgoing' : 'incoming';
+    const ownLangName = LANG_NAME[userLang];
+    const otherLangName = LANG_NAME[otherLang];
+
+    fireBtn.disabled = true;
+    placeholder.style.display = 'none';
+    ticket.classList.remove('show');
+    loading.classList.add('show');
+
+    let systemPrompt;
+
+    if (mode === 'outgoing') {
+      // Writing in their own language, need it translated to send to the other-language speaker
+      systemPrompt = `You help a restaurant manager communicate clearly with her bilingual (${ownLangName}/${otherLangName}) staff. She speaks ${ownLangName} and is writing a message in ${ownLangName} that needs to go out in ${otherLangName}, the way a bilingual coworker would naturally say it out loud in this exact situation, not a literal dictionary translation.
+
+Context for this message:
+- Audience: ${recipient}.
+- Context: ${situation}.
+
+Give her 3 distinct phrasing options. For each option, provide: a short label (2-3 words) describing how it differs (for example: tone, directness, warmth), the phrasing rewritten naturally in ${ownLangName} (so she can see exactly what she'd be saying), and the natural ${otherLangName} translation of that same phrasing. Each option should be genuinely different from the others, not near-duplicates. Keep each phrasing and translation short, no more than 2 sentences. Do not use em dashes anywhere. Write natural spoken workplace language, not formal or literary phrasing.
+
+Respond with ONLY valid JSON, no markdown formatting, no code fences, no preamble. Use exactly this shape:
+{"options": [{"label": "short label", "original": "phrasing in ${ownLangName}", "translation": "translation in ${otherLangName}"}, {"label": "short label", "original": "phrasing in ${ownLangName}", "translation": "translation in ${otherLangName}"}, {"label": "short label", "original": "phrasing in ${ownLangName}", "translation": "translation in ${otherLangName}"}]}`;
+    } else {
+      // Reading/transcribing a message in the other language, need to understand it in their own language
+      systemPrompt = `You help a restaurant manager understand what her bilingual (${ownLangName}/${otherLangName}) staff are telling her. She speaks ${ownLangName}. Someone said something to her in ${otherLangName}, and she needs to understand it fully in ${ownLangName}.
+
+Context for this message:
+- Who said it: ${recipient}.
+- Context: ${situation}.
+
+Give her two things, both written in ${ownLangName}: an exact, literal translation (word-for-word as possible, still readable), and a separate "what they mean" explanation that captures the real intent, tone, subtext, or emotion behind it, the way a bilingual coworker would explain it to her if she asked "what are they really saying?" These two should be genuinely different when the literal words don't fully capture the intent; if the literal translation already fully captures it, the meaning explanation can be brief and simply confirm that. Keep both parts short and to the point. Do not use em dashes anywhere.
+
+Respond with ONLY valid JSON, no markdown formatting, no code fences, no preamble. Use exactly this shape:
+{"exact": "literal translation in ${ownLangName}", "meaning": "what they mean explanation in ${ownLangName}, capturing real intent and tone"}`;
+    }
+
+    try {
+      const response = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: systemPrompt + "\n\nMessage to work with:\n" + message
+
+        })
+      });
+
+      const rawText = await response.text();
+      console.log('HTTP status:', response.status);
+      console.log('Raw response body:', rawText);
+
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (e) {
+        throw new Error('Response was not JSON. Status ' + response.status + ': ' + rawText.slice(0, 200));
+      }
+      console.log('API response:', data);
+
+      if (data.error) {
+        throw new Error(data.error.message || 'The API returned an error.');
+      }
+      if (!data.content || !Array.isArray(data.content)) {
+        throw new Error('The response didn\'t include the expected content. Try again.');
+      }
+
+      const textBlock = data.content.find(b => b.type === 'text');
+      if (!textBlock || !textBlock.text) {
+        throw new Error('No text came back in the response. Try again.');
+      }
+
+      let parsed;
+      try {
+        let cleaned = textBlock.text.replace(/```json|```/g, '').trim();
+        // If there's stray text around the JSON object, pull out just the {...} block
+        const firstBrace = cleaned.indexOf('{');
+        const lastBrace = cleaned.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+        }
+        parsed = JSON.parse(cleaned);
+      } catch (e) {
+        throw new Error('Could not read the response. Try firing again.');
+      }
+
+      ticketCount++;
+      document.getElementById('ticket-num').textContent = '#' + String(ticketCount).padStart(3, '0');
+      document.getElementById('ticket-time').textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+      const contentEl = document.getElementById('ticket-content');
+      contentEl.innerHTML = '';
+
+      if (mode === 'outgoing') {
+        const options = (parsed.options || []).filter(o => o && o.translation);
+        options.forEach((opt, i) => {
+          const block = document.createElement('div');
+          block.className = 'opt-block';
+          block.innerHTML = `
+            <div class="opt-label">${escapeHtml(opt.label || ('Option ' + (i + 1)))}</div>
+            <div class="opt-text" style="color:#6b6656; font-size:13px; margin-bottom:6px;">${escapeHtml(opt.original || '')}</div>
+            <div class="opt-text">${escapeHtml(opt.translation)}</div>
+            <button class="copy-btn" type="button" data-copy="${encodeURIComponent(opt.translation)}">Copy ${escapeHtml(otherLangName)}</button>
+          `;
+          contentEl.appendChild(block);
+        });
+      } else {
+        const exactBlock = document.createElement('div');
+        exactBlock.className = 'opt-block';
+        exactBlock.innerHTML = `
+          <div class="opt-label">Exact translation</div>
+          <div class="opt-text">${escapeHtml(parsed.exact || '(none returned)')}</div>
+          <button class="copy-btn" type="button" data-copy="${encodeURIComponent(parsed.exact || '')}">Copy</button>
+        `;
+        const meaningBlock = document.createElement('div');
+        meaningBlock.className = 'opt-block';
+        meaningBlock.innerHTML = `
+          <div class="opt-label">What they mean</div>
+          <div class="opt-text">${escapeHtml(parsed.meaning || '(none returned)')}</div>
+          <button class="copy-btn" type="button" data-copy="${encodeURIComponent(parsed.meaning || '')}">Copy</button>
+        `;
+        contentEl.appendChild(exactBlock);
+        contentEl.appendChild(meaningBlock);
+      }
+
+      attachCopyHandlers();
+      loading.classList.remove('show');
+      ticket.classList.add('show');
+
+    } catch (err) {
+      loading.classList.remove('show');
+      placeholder.style.display = 'flex';
+      errorMsg.textContent = (err && err.message) ? err.message : 'Something went wrong. Try again.';
+      errorMsg.style.display = 'block';
+      console.error(err);
+    } finally {
+      fireBtn.disabled = false;
+    }
+  }
+
+  fireBtn.addEventListener('click', fireTicket);
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : str;
+    return div.innerHTML;
+  }
+
+  function attachCopyHandlers() {
+    document.querySelectorAll('#ticket-content .copy-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const text = decodeURIComponent(btn.dataset.copy || '');
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch (e) {
+          const temp = document.createElement('textarea');
+          temp.value = text;
+          document.body.appendChild(temp);
+          temp.select();
+          document.execCommand('copy');
+          document.body.removeChild(temp);
+        }
+        const original = btn.textContent;
+        btn.textContent = 'Copied ✓';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = original;
+          btn.classList.remove('copied');
+        }, 1600);
+      });
+    });
+  }
+</script>
+</body>
+</html>
