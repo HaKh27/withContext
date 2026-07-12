@@ -17,10 +17,14 @@ withContext asks who the message is for and what the situation
 is, then translates the way a bilingual coworker would actually
 say it.
 
-- Writing a message: get three phrasing options in different
-  tones, each with the original and its translation.
-- Reading a message: get an exact translation plus a plain
-  explanation of what the person really means.
+It adapts to which language you speak:
+
+- Writing a message to send: get a faithful translation of what
+  you wrote, plus one suggested alternative phrasing that may
+  land better in that context. Each is shown with its meaning in
+  your own language, so you always know what you are sending.
+- Reading a message you received: get an exact translation plus
+  a plain explanation of what the person really means.
 
 ## Why I built it
 
@@ -33,4 +37,4 @@ staff. I built this to solve a problem I actually have.
 - Claude (Anthropic API) for the translation
 - Vercel serverless function as a backend that keeps the API
   key secure
-- Vanilla HTML, CSS, and JavaScript
+- Plain HTML, CSS, and JavaScript, no framework

@@ -581,7 +581,7 @@
             Fill out the form and hit translate.<br>Your result will appear here.
           </div>
           <div class="loading-ticket" id="loading">
-            firing ticket<span class="dots"></span>
+            translating<span class="dots"></span>
           </div>
           <div class="ticket" id="ticket">
             <div class="ticket-head">
@@ -658,7 +658,7 @@
     errorMsg.style.display = 'none';
 
     if (!message) {
-      errorMsg.textContent = 'Write a message before firing the ticket.';
+      errorMsg.textContent = 'Write a message first.';
       errorMsg.style.display = 'block';
       return;
     }
@@ -677,29 +677,17 @@
     let systemPrompt;
 
     if (mode === 'outgoing') {
-      // Writing in their own language, need it translated to send to the other-language speaker
-      systemPrompt = `You help a restaurant manager communicate clearly with her bilingual (${ownLangName}/${otherLangName}) staff. She speaks ${ownLangName} and is writing a message in ${ownLangName} that needs to go out in ${otherLangName}, the way a bilingual coworker would naturally say it out loud in this exact situation, not a literal dictionary translation.
-
-Context for this message:
-- Audience: ${recipient}.
-- Context: ${situation}.
-
-Give her 3 distinct phrasing options. For each option, provide: a short label (2-3 words) describing how it differs (for example: tone, directness, warmth), the phrasing rewritten naturally in ${ownLangName} (so she can see exactly what she'd be saying), and the natural ${otherLangName} translation of that same phrasing. Each option should be genuinely different from the others, not near-duplicates. Keep each phrasing and translation short, no more than 2 sentences. Do not use em dashes anywhere. Write natural spoken workplace language, not formal or literary phrasing.
-
-Respond with ONLY valid JSON, no markdown formatting, no code fences, no preamble. Use exactly this shape:
-{"options": [{"label": "short label", "original": "phrasing in ${ownLangName}", "translation": "translation in ${otherLangName}"}, {"label": "short label", "original": "phrasing in ${ownLangName}", "translation": "translation in ${otherLangName}"}, {"label": "short label", "original": "phrasing in ${ownLangName}", "translation": "translation in ${otherLangName}"}]}`;
+      systemPrompt = `A restaurant manager who speaks ${ownLangName} is sending a message to bilingual staff in ${otherLangName}.
+Audience: ${recipient}. Context: ${situation}.
+Give two things in ${otherLangName}: first, a faithful translation of exactly what she wrote, staying true to her words and meaning, but phrased naturally so it does not sound like a machine. Second, ONE suggested alternative phrasing that would land better in this specific context. If her original is already well suited, keep the suggestion close to it. For each of the two, also give a plain ${ownLangName} rendering of what that ${otherLangName} text actually says, so she can see exactly what she would be sending. Keep everything short and natural spoken workplace language. No em dashes.
+Reply ONLY valid JSON, no code fences or preamble:
+{"exact":"","exact_back":"","suggestion":"","suggestion_back":""}`;
     } else {
-      // Reading/transcribing a message in the other language, need to understand it in their own language
-      systemPrompt = `You help a restaurant manager understand what her bilingual (${ownLangName}/${otherLangName}) staff are telling her. She speaks ${ownLangName}. Someone said something to her in ${otherLangName}, and she needs to understand it fully in ${ownLangName}.
-
-Context for this message:
-- Who said it: ${recipient}.
-- Context: ${situation}.
-
-Give her two things, both written in ${ownLangName}: an exact, literal translation (word-for-word as possible, still readable), and a separate "what they mean" explanation that captures the real intent, tone, subtext, or emotion behind it, the way a bilingual coworker would explain it to her if she asked "what are they really saying?" These two should be genuinely different when the literal words don't fully capture the intent; if the literal translation already fully captures it, the meaning explanation can be brief and simply confirm that. Keep both parts short and to the point. Do not use em dashes anywhere.
-
-Respond with ONLY valid JSON, no markdown formatting, no code fences, no preamble. Use exactly this shape:
-{"exact": "literal translation in ${ownLangName}", "meaning": "what they mean explanation in ${ownLangName}, capturing real intent and tone"}`;
+      systemPrompt = `A restaurant manager who speaks ${ownLangName} received a message in ${otherLangName} from staff and needs to understand it.
+Who said it: ${recipient}. Context: ${situation}.
+Give two things in ${ownLangName}: an exact literal translation (still readable), and a "what they mean" explanation capturing real intent, tone, and subtext. If the literal already captures everything, keep the meaning brief. Keep both short. No em dashes.
+Reply ONLY valid JSON, no code fences or preamble:
+{"exact":"","meaning":""}`;
     }
 
     try {
@@ -708,7 +696,6 @@ Respond with ONLY valid JSON, no markdown formatting, no code fences, no preambl
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: systemPrompt + "\n\nMessage to work with:\n" + message
-
         })
       });
 
@@ -747,7 +734,7 @@ Respond with ONLY valid JSON, no markdown formatting, no code fences, no preambl
         }
         parsed = JSON.parse(cleaned);
       } catch (e) {
-        throw new Error('Could not read the response. Try firing again.');
+        throw new Error('Could not read the response. Try again.');
       }
 
       ticketCount++;
@@ -758,18 +745,27 @@ Respond with ONLY valid JSON, no markdown formatting, no code fences, no preambl
       contentEl.innerHTML = '';
 
       if (mode === 'outgoing') {
-        const options = (parsed.options || []).filter(o => o && o.translation);
-        options.forEach((opt, i) => {
-          const block = document.createElement('div');
-          block.className = 'opt-block';
-          block.innerHTML = `
-            <div class="opt-label">${escapeHtml(opt.label || ('Option ' + (i + 1)))}</div>
-            <div class="opt-text" style="color:#6b6656; font-size:13px; margin-bottom:6px;">${escapeHtml(opt.original || '')}</div>
-            <div class="opt-text">${escapeHtml(opt.translation)}</div>
-            <button class="copy-btn" type="button" data-copy="${encodeURIComponent(opt.translation)}">Copy ${escapeHtml(otherLangName)}</button>
+        const exactBlock = document.createElement('div');
+        exactBlock.className = 'opt-block';
+        exactBlock.innerHTML = `
+          <div class="opt-label">Exact translation</div>
+          <div class="opt-text">${escapeHtml(parsed.exact || '(none returned)')}</div>
+          ${parsed.exact_back ? `<div class="opt-text" style="color:#7a7362; font-size:13px; font-style:italic; margin-bottom:8px;">${escapeHtml(parsed.exact_back)}</div>` : ''}
+          <button class="copy-btn" type="button" data-copy="${encodeURIComponent(parsed.exact || '')}">Copy</button>
+        `;
+        contentEl.appendChild(exactBlock);
+
+        if (parsed.suggestion && parsed.suggestion.trim()) {
+          const suggestBlock = document.createElement('div');
+          suggestBlock.className = 'opt-block';
+          suggestBlock.innerHTML = `
+            <div class="opt-label">Another way to say it</div>
+            <div class="opt-text">${escapeHtml(parsed.suggestion)}</div>
+            ${parsed.suggestion_back ? `<div class="opt-text" style="color:#7a7362; font-size:13px; font-style:italic; margin-bottom:8px;">${escapeHtml(parsed.suggestion_back)}</div>` : ''}
+            <button class="copy-btn" type="button" data-copy="${encodeURIComponent(parsed.suggestion)}">Copy</button>
           `;
-          contentEl.appendChild(block);
-        });
+          contentEl.appendChild(suggestBlock);
+        }
       } else {
         const exactBlock = document.createElement('div');
         exactBlock.className = 'opt-block';
